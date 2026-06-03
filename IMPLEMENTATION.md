@@ -1,207 +1,117 @@
-# CloudOps Event Platform Implementation Timeline
+# GroupMark Implementation Plan
 
-CloudOps Event Platform is a backend-only cloud and data engineering platform for ingesting, storing, archiving, and analysing operational events from software services.
+This plan builds GroupMark in three stages:
 
-The final project should prove that you can build a production-style backend and data platform, deploy it on AWS, automate infrastructure with Terraform, run CI/CD with GitHub Actions, manage secrets securely, store and process event data, generate analytics, and monitor the system with CloudWatch.
+1. **MVP backend**: prove the core product works.
+2. **Resume-worthy production version**: add cloud, CI/CD, S3, observability, and deployment.
+3. **Very impressive version**: add advanced product features after the foundation is stable.
 
-This timeline is designed for 28 days. The goal is not to build every possible feature, but to finish a resume-ready vertical slice with strong backend, data engineering, cloud, and DevOps signals.
+The main goal is to finish a backend-first app that you can explain deeply in interviews. Build the core workflow yourself, then use AI mainly for review, debugging, tests, and infrastructure guidance.
 
-## Project Scope
+## Stage 1: MVP Backend
 
-Core event types:
+**Goal:** build the useful product core.
 
-```text
-deployment_started
-deployment_succeeded
-deployment_failed
-incident_created
-incident_resolved
-health_check_failed
-health_check_recovered
-```
+MVP includes:
 
-Core resources:
-
-```text
-User
-Service
-Event
-DeadLetterEvent
-DailyServiceMetrics
-```
-
-Core API features:
-
+- FastAPI backend
+- PostgreSQL
+- dbmate raw SQL migrations
 - JWT authentication
-- service management
-- operational event ingestion
-- event validation
-- idempotency keys to prevent duplicate event processing
-- event querying and filtering
-- invalid event handling through a dead-letter table
-- health and readiness endpoints
-- analytics endpoints for deployment failure rate, incident trends, service health, and daily service metrics
+- project workspaces
+- members and roles
+- task workflow
+- comments
+- contribution events
+- contribution reports
+- Docker Compose
+- tests
+- README and demo flow
 
-Data engineering layer:
+MVP excludes:
 
-- valid events are stored in PostgreSQL for normal application queries
-- raw event payloads are archived to S3 using partitioned paths
-- invalid events are recorded in a dead-letter table
-- a scheduled aggregation job calculates daily metrics per service
-- a backfill command can recompute metrics for a historical date range
-- aggregated metrics are stored in `daily_service_metrics` and exposed through analytics endpoints
+- frontend
+- S3 uploads
+- email invitations
+- Celery/Redis
+- notifications
+- AI summaries
+- GitHub integration
+- PDF export
+- AWS deployment
 
-Cloud infrastructure:
+## Day 1: Project Structure
 
-- FastAPI app containerised with Docker
-- PostgreSQL deployed using AWS RDS
-- raw event archive stored in Amazon S3
-- app deployed to AWS ECS Fargate
-- Docker images stored in Amazon ECR
-- infrastructure provisioned with Terraform
-- secrets stored in AWS Secrets Manager or SSM Parameter Store
-- logs sent to CloudWatch
-- scheduled aggregation job triggered using EventBridge Scheduler
-- application exposed through an Application Load Balancer
+Set up the backend project structure.
 
-CI/CD:
-
-- pull requests run tests, linting, formatting checks, Docker build verification, and security scans
-- merges to `main` build and push Docker images to ECR, then deploy to ECS
-- deployments update ECS and verify health checks
-
-## Recommended Repository Structure
+Target structure:
 
 ```text
-cloudtask-gitops-platform/
-  app/
-    main.py
+app/
+  main.py
+  core/
     config.py
+    security.py
     database.py
-    auth/
-    service_catalog/
-    events/
-    analytics/
-    jobs/
-    storage/
-  migrations/
-  tests/
-  infra/
-    main.tf
-    variables.tf
-    outputs.tf
-  scripts/
-    demo_seed_events.py
-  docs/
-    architecture.md
-    deployment.md
-    data-pipeline.md
-    runbook.md
-    security.md
-  .github/
-    workflows/
-      ci.yml
-      deploy.yml
-  Dockerfile
-  docker-compose.yml
-  README.md
+    exceptions.py
+  api/
+    deps.py
+    routes/
+      health.py
+      auth.py
+      projects.py
+      members.py
+      tasks.py
+      comments.py
+      events.py
+      reports.py
+  models/
+  schemas/
+  repositories/
+  services/
+migrations/
+tests/
+docs/
+infra/
+scripts/
+.github/workflows/
+Dockerfile
+docker-compose.yml
+.env.example
+README.md
 ```
-
-## Week 1: Backend Foundation
-
-### Day 1: Project Setup
-
-Set up the repository structure.
 
 Deliverables:
 
-- Python environment
-- FastAPI installed
-- initial app package
-- `tests/` directory
-- `migrations/` directory
-- `infra/` directory
-- `docs/` directory
-- `.github/workflows/` directory
-- `Dockerfile`
-- `docker-compose.yml`
-- `.env.example`
-- initial `README.md`
+- FastAPI app starts
+- `GET /health` returns `{"status": "ok"}`
+- `.gitignore` ignores `.venv`, `__pycache__`, `.env`, and Python cache files
+- empty project directories are either populated or kept with placeholder files
 
-End the day with this endpoint working locally:
-
-```text
-GET /health
-```
-
-Expected response:
-
-```json
-{
-  "status": "ok"
-}
-```
-
-### Day 2: Configuration, Database, Migrations
-
-Build the backend foundation.
+## Day 2: Config, Database, And Migrations
 
 Implement:
 
-- environment-based config
-- PostgreSQL database connection
-- database session handling
-- dbmate raw SQL migration setup
-- initial `users` table
-- readiness endpoint that checks database connectivity
+- centralized settings in `app/core/config.py`
+- PostgreSQL connection in `app/core/database.py`
+- `GET /ready` endpoint that checks database connectivity
+- dbmate migration setup
 
-Endpoints:
+Use dbmate raw SQL migrations.
 
-```text
-GET /health
-GET /ready
-```
+Do not use Alembic.
 
 Deliverables:
 
-- local PostgreSQL works through Docker Compose
-- migrations can be applied from scratch
-- readiness fails when the database is unavailable
-- tests for health and readiness
+- `migrations/001_create_users.sql`
+- local PostgreSQL connection configured
+- `dbmate up` works
+- `/ready` passes when DB is available
+- `/ready` fails cleanly when DB is unavailable
 
-Migration guidance:
+## Day 3: Authentication
 
-- keep migrations as raw SQL files in `migrations/`
-- use `dbmate` for migrations
-- do not use Alembic
-- make the same migration command work locally, in CI, and before deployment
-
-Example migration file shape:
-
-```sql
--- migrate:up
-CREATE TABLE users (
-  id UUID PRIMARY KEY,
-  email TEXT NOT NULL UNIQUE,
-  password_hash TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- migrate:down
-DROP TABLE users;
-```
-
-Expected migration command:
-
-```bash
-dbmate up
-```
-
-### Day 3: Authentication
-
-Implement JWT authentication.
-
-Endpoints:
+Implement routes:
 
 ```text
 POST /auth/register
@@ -214,330 +124,449 @@ Build:
 - password hashing
 - JWT creation
 - JWT validation dependency
-- user creation
-- current user lookup
-- auth tests
+- current user dependency
+- user schema and repository
+
+Tests:
+
+- register user
+- duplicate email fails
+- login succeeds
+- invalid login fails
+- protected route rejects missing token
+
+## Day 4: Project Workspaces
+
+Create tables:
+
+```text
+projects
+project_members
+```
+
+Implement routes:
+
+```text
+POST   /projects
+GET    /projects
+GET    /projects/{project_id}
+PATCH  /projects/{project_id}
+DELETE /projects/{project_id}
+```
 
 Rules:
 
-- never store plaintext passwords
-- never return password hashes in API responses
-- protected routes must reject missing or invalid tokens
+- creating a project also creates owner membership
+- users only list projects they belong to
+- only owners can delete projects
+- inaccessible projects return `404`
 
-### Day 4: Service Management
+Tests:
 
-Implement service CRUD.
+- create project
+- list own projects
+- cannot view project outside membership
+- non-owner cannot delete project
 
-Resource:
+## Day 5: Member Management
+
+Implement routes:
 
 ```text
-Service
+POST   /projects/{project_id}/members
+GET    /projects/{project_id}/members
+PATCH  /projects/{project_id}/members/{member_id}
+DELETE /projects/{project_id}/members/{member_id}
 ```
 
-Endpoints:
+MVP behavior:
+
+- owner adds existing users by email
+- owner can change role
+- owner can remove members
+- no email invite flow yet
+
+Tests:
+
+- owner adds member
+- non-owner cannot add member
+- viewer cannot add member
+- owner changes role
+- owner removes member
+
+## Day 6: Permission Layer
+
+Create reusable permission helpers.
+
+Implement checks for:
 
 ```text
-POST   /services
-GET    /services
-GET    /services/{service_id}
-PATCH  /services/{service_id}
-DELETE /services/{service_id}
+is_project_member
+is_project_owner
+can_view_project
+can_update_project
+can_manage_members
+can_create_task
+can_comment
+can_generate_report
 ```
 
 Rules:
 
-- services belong to users
-- users can only access their own services
-- service names should be unique per user
-- return `404` when a service does not exist or does not belong to the current user
+- owner can manage project and members
+- member can create tasks and comments
+- viewer can read only
+- users outside project get `404`
 
-Add tests for ownership isolation.
+Tests:
 
-### Day 5: Event Model and Ingestion Skeleton
+- owner permissions
+- member permissions
+- viewer permissions
+- outsider access blocked
 
-Create event tables.
+## Day 7: Task CRUD
 
-Tables:
+Create `tasks` table.
 
-```text
-events
-dead_letter_events
-```
-
-Implement the first ingestion endpoint:
+Implement routes:
 
 ```text
-POST /services/{service_id}/events
+POST   /projects/{project_id}/tasks
+GET    /projects/{project_id}/tasks
+GET    /projects/{project_id}/tasks/{task_id}
+PATCH  /projects/{project_id}/tasks/{task_id}
+DELETE /projects/{project_id}/tasks/{task_id}
 ```
 
-Validation requirements:
+Support:
 
-- valid event type
-- valid timestamp
-- valid payload shape
-- service exists and belongs to the authenticated user
+```text
+title
+description
+status
+priority
+size
+assigned_to
+due_date
+```
 
-Dead-letter guidance:
+Tests:
 
-- malformed event payloads from authorized requests should be stored in `dead_letter_events`
-- unauthorized requests should return `401` or `404` and should not be stored as dead-letter events
+- member creates task
+- viewer cannot create task
+- assigned user must be project member
+- filter tasks by assignee
+- filter tasks by status
 
-Do not add S3 yet. Make database ingestion reliable first.
+## Day 8: Task Workflow
 
-### Day 6: Idempotency and Dead-Letter Handling
+Implement routes:
 
-Add idempotency and invalid event handling.
+```text
+POST /projects/{project_id}/tasks/{task_id}/submit
+POST /projects/{project_id}/tasks/{task_id}/approve
+POST /projects/{project_id}/tasks/{task_id}/dispute
+```
+
+Workflow:
+
+```text
+todo -> in_progress -> review -> done
+```
+
+Rules:
+
+- assignee can submit task for review
+- owner or another member can approve
+- user cannot approve their own task
+- disputed tasks do not count as verified work
+
+Tests:
+
+- assignee submits task
+- another member approves task
+- self-approval fails
+- disputed task is excluded from verified contribution
+
+## Day 9: Task Comments
+
+Create `task_comments` table.
+
+Implement routes:
+
+```text
+POST   /projects/{project_id}/tasks/{task_id}/comments
+GET    /projects/{project_id}/tasks/{task_id}/comments
+PATCH  /projects/{project_id}/tasks/{task_id}/comments/{comment_id}
+DELETE /projects/{project_id}/tasks/{task_id}/comments/{comment_id}
+```
+
+Rules:
+
+- members can comment
+- viewers can read comments
+- authors can edit/delete their own comments
+
+Tests:
+
+- member adds comment
+- viewer cannot add comment
+- author edits comment
+- other user cannot edit comment
+
+## Day 10: Contribution Events
+
+Create `contribution_events` table.
+
+Automatically log:
+
+```text
+project_created
+member_added
+member_removed
+member_role_changed
+task_created
+task_assigned
+task_status_changed
+task_submitted
+task_approved
+task_disputed
+comment_added
+```
 
 Implement:
 
-- `Idempotency-Key` header
-- unique constraint per service and idempotency key
-- duplicate submissions do not create duplicate events
-- invalid event payloads are recorded in `dead_letter_events`
+```text
+GET /projects/{project_id}/events
+```
 
-Expected behavior:
+Tests:
+
+- project creation logs event
+- task creation logs event
+- task approval logs event
+- outsiders cannot view events
+
+## Day 11: Report Table And Basic Report Endpoint
+
+Create `reports` table with JSONB report data.
+
+Implement:
 
 ```text
-valid authorized event -> events table
-invalid authorized event payload -> dead_letter_events table
-unauthorized request -> rejected, not dead-lettered
-duplicate event -> no duplicate processing
+POST /projects/{project_id}/reports
+GET  /projects/{project_id}/reports/latest
+GET  /projects/{project_id}/reports/{report_id}
 ```
+
+Report should include:
+
+- project summary
+- member summaries
+- task counts
+- comment counts
+- approval counts
+- dispute counts
+
+Tests:
+
+- generate report
+- latest report returns newest report
+- report is stored as snapshot
+
+## Day 12: Contribution Scoring
+
+Implement MVP scoring.
+
+Formula:
+
+```text
+Final Score =
+0.50 * TaskDelivery
++ 0.20 * Collaboration
++ 0.15 * Reliability
++ 0.15 * ReviewActivity
+```
+
+Include:
+
+- task size weights
+- approved task ratio
+- on-time completion
+- comments, capped
+- reviews given, capped
+
+Tests:
+
+- score with no assigned tasks
+- score with approved tasks
+- late task affects reliability
+- comment spam is capped
+- disputed tasks do not count as approved
+
+## Day 13: Evidence-Based Report Details
+
+Improve reports so they show evidence behind scores.
+
+Per member, include:
+
+```text
+assigned tasks
+approved tasks
+incomplete tasks
+late tasks
+disputed tasks
+comments added
+reviews given
+timeline events
+score breakdown
+```
+
+Tests:
+
+- report includes evidence
+- report includes timeline
+- score breakdown is explainable
+
+## Day 14: MVP Test Hardening
+
+Focus on tests and edge cases.
 
 Add tests for:
 
-- duplicate idempotency keys
-- invalid event type
-- invalid payload
-- inaccessible service
-
-### Day 7: Event Querying
-
-Implement event history APIs.
-
-Endpoints:
-
-```text
-GET /services/{service_id}/events
-GET /events
-```
-
-Filters:
-
-```text
-event_type
-service_id
-start_date
-end_date
-limit
-offset
-```
-
-Deliverables:
-
-- pagination
-- date filtering
-- event type filtering
-- ownership-safe queries
-- tests for event filtering
-
-By the end of Week 1, the project should have a strong backend core.
-
-## Week 2: Data Engineering and Analytics
-
-### Day 8: S3 Storage Abstraction
-
-Create a storage layer.
-
-Files:
-
-```text
-app/storage/s3.py
-app/storage/local.py
-```
-
-Use an interface-like boundary so local development can write archived payloads to disk while production writes to S3. Build local storage first, then wire in real S3 once the AWS infrastructure exists.
-
-Archive path format:
-
-```text
-raw/year=2026/month=06/day=02/service=payments-api/event-id.json
-```
-
-Deliverables:
-
-- raw event archive path generator
-- local storage implementation
-- S3 client wrapper stub or interface
-- tests can mock storage
-
-### Day 9: Integrate Archival With Ingestion
-
-Wire storage into event ingestion.
-
-Ingestion flow:
-
-1. Validate event.
-2. Store valid event in PostgreSQL.
-3. Archive raw payload.
-4. Store archive path and archive status.
-5. Return event response.
-
-Recommended event fields:
-
-```text
-archive_status = pending | archived | failed
-archive_path
-```
-
-Failure behavior:
-
-- if the database write fails, the request fails
-- if archival fails, mark the event `archive_status` as `failed` and log the failure
-
-For resume quality, preserve the event even if S3 archival fails.
-
-### Day 10: Daily Metrics Table
-
-Create:
-
-```text
-daily_service_metrics
-```
-
-Suggested fields:
-
-```text
-id
-service_id
-metric_date
-deployment_count
-deployment_success_count
-deployment_failure_count
-incident_count
-incident_resolved_count
-health_check_failure_count
-health_check_recovery_count
-created_at
-updated_at
-```
-
-Add a unique constraint:
-
-```text
-service_id + metric_date
-```
-
-### Day 11: Aggregation Job
-
-Implement scheduled aggregation logic.
-
-File:
-
-```text
-app/jobs/aggregate_daily_metrics.py
-```
-
-Command:
-
-```bash
-python -m app.jobs.aggregate_daily_metrics --date 2026-06-02
-```
-
-Requirements:
-
-- calculate daily metrics from the `events` table
-- upsert into `daily_service_metrics`
-- be safe to re-run
-- log the date and number of services processed
-- include tests with sample events
-
-### Day 12: Backfill Command
-
-Implement historical recomputation.
-
-Command:
-
-```bash
-python -m app.jobs.backfill_metrics --start-date 2026-06-01 --end-date 2026-06-30
-```
-
-Rules:
-
-- loop by date
-- call the same aggregation logic used by the daily job
-- overwrite or recompute existing metrics safely
-- log progress clearly
-
-### Day 13: Analytics Endpoints
-
-Build analytics APIs.
-
-Endpoints:
-
-```text
-GET /analytics/services/{service_id}/daily-metrics
-GET /analytics/services/{service_id}/deployment-failure-rate
-GET /analytics/services/{service_id}/incident-trends
-GET /analytics/services/{service_id}/health
-```
-
-Support date ranges:
-
-```text
-?start_date=2026-06-01&end_date=2026-06-30
-```
-
-Where possible, analytics should use `daily_service_metrics` rather than scanning raw events.
-
-### Day 14: Test Hardening
-
-Focus on test coverage.
-
-Add or improve tests for:
-
 - auth
-- service ownership
-- valid event ingestion
-- invalid event dead-lettering
-- idempotency
-- event filtering
-- archive path generation
-- archive failure handling
-- daily aggregation
-- backfill
-- analytics endpoints
+- project access
+- role permissions
+- task workflow
+- comments
+- events
+- reports
+- scoring
 
-By the end of Week 2, the app should be locally impressive and data-focused.
+Goal:
 
-## Week 3: Docker, CI/CD, Terraform
+```text
+pytest passes reliably against local PostgreSQL
+```
 
-### Day 15: Dockerize the App
+## Day 15: Docker Compose Local Development
 
-Create a production-oriented Dockerfile.
-
-Requirements:
-
-- slim Python base image
-- dependencies installed cleanly
-- app runs with Uvicorn or Gunicorn/Uvicorn workers
-- exposes port `8000`
-- avoids committing secrets
-
-Update Docker Compose:
+Set up:
 
 ```text
 api
 postgres
 ```
 
-Add README commands:
+Deliverables:
 
-```bash
-docker compose up --build
+- `docker compose up --build` starts app and DB
+- app connects to Postgres through environment variables
+- migrations can be run against compose DB
+- README includes local Docker workflow
+
+## Day 16: Demo Seed Script
+
+Create:
+
+```text
+scripts/demo_seed.py
 ```
 
-### Day 16: Linting, Formatting, CI
+It should create:
+
+- owner user
+- member users
+- viewer user
+- project
+- tasks
+- comments
+- submitted tasks
+- approved tasks
+- disputed task
+- generated report
+
+Goal:
+
+```text
+fresh local app -> seed data -> generate useful report
+```
+
+## Day 17: MVP Documentation
+
+Update README with:
+
+- what GroupMark does
+- local setup
+- env vars
+- dbmate migration commands
+- test commands
+- Docker Compose commands
+- API route summary
+- demo flow
+
+Add docs:
+
+```text
+docs/architecture.md
+docs/scoring.md
+```
+
+## Day 18: MVP Freeze
+
+No new features.
+
+Do:
+
+- fix bugs
+- clean naming
+- remove dead code
+- improve error responses
+- verify fresh setup
+- verify tests
+- verify demo script
+
+MVP complete when:
+
+```text
+user registers -> creates project -> adds members -> creates tasks -> submits/approves work -> comments -> generates contribution report
+```
+
+## Stage 2: Resume-Worthy Production Version
+
+**Goal:** make the project production-style and cloud-deployable.
+
+Adds:
+
+- structured logging
+- CI
+- Docker build checks
+- S3 file evidence uploads
+- Terraform AWS infrastructure
+- ECS Fargate deployment
+- RDS PostgreSQL
+- CloudWatch logs and alarms
+- security scanning
+- deployment docs
+
+## Day 19: Structured Logging And Error Handling
+
+Add:
+
+- JSON logs
+- request ID middleware
+- consistent error responses
+- safe logging for auth and permission failures
+
+Do not log:
+
+- passwords
+- JWTs
+- secrets
+- full authorization headers
+
+## Day 20: CI Basics
 
 Create:
 
@@ -545,87 +574,171 @@ Create:
 .github/workflows/ci.yml
 ```
 
-Run on pull requests:
+Run:
 
 - install dependencies
-- run formatting check
-- run linting
-- run tests
-- build Docker image
+- formatting check
+- linting
+- tests
 
-Suggested tools:
+Recommended tools:
 
 ```text
 ruff
 pytest
-trivy
 ```
 
-Keep CI simple and reliable before making it advanced.
+## Day 21: CI With PostgreSQL And Migrations
 
-### Day 17: Security Scan and Test Database in CI
+Improve CI:
 
-Improve CI with a real database.
+- add PostgreSQL service container
+- run `dbmate up`
+- run tests against PostgreSQL
+- verify migrations work from scratch
+
+## Day 22: Docker Build And Security Scan In CI
 
 Add:
 
-- PostgreSQL service container
-- migration step
-- test execution against PostgreSQL
+- Docker build verification
 - Trivy filesystem or image scan
 
-Deliverable:
+Goal:
 
-- PR checks prove the app can install, migrate, test, and build
+```text
+PR checks prove the app installs, migrates, tests, builds, and scans
+```
 
-### Day 18: Terraform Foundation
+## Day 23: File Metadata Model
 
-Start AWS infrastructure in `infra/`.
+Create `files` table.
 
-Define:
+Fields:
+
+```text
+id
+project_id
+task_id
+uploaded_by
+filename
+s3_key
+content_type
+file_size_bytes
+created_at
+```
+
+Add repository and service layer.
+
+## Day 24: Storage Abstraction
+
+Create storage layer:
+
+```text
+app/storage/base.py
+app/storage/local.py
+app/storage/s3.py
+```
+
+Use local/mock storage in tests and development.
+
+Do not require AWS credentials for local tests.
+
+## Day 25: S3 Presigned Upload Flow
+
+Implement routes:
+
+```text
+POST /projects/{project_id}/files/presign-upload
+POST /projects/{project_id}/files/confirm-upload
+GET  /projects/{project_id}/files
+GET  /projects/{project_id}/files/{file_id}/download-url
+DELETE /projects/{project_id}/files/{file_id}
+```
+
+Rules:
+
+- users must be project members
+- viewers cannot upload
+- files may link to tasks
+- uploaded files create `file_uploaded` contribution events
+
+## Day 26: File Evidence In Reports
+
+Add evidence score to reports.
+
+Updated formula:
+
+```text
+Final Score =
+0.45 * TaskDelivery
++ 0.20 * Evidence
++ 0.15 * Collaboration
++ 0.10 * Reliability
++ 0.10 * ReviewActivity
+```
+
+Tests:
+
+- file uploads affect evidence score
+- evidence score is capped
+- linked task files appear in report
+
+## Day 27: Production Dockerfile
+
+Improve Dockerfile:
+
+- slim Python base image
+- no dev-only files in image where practical
+- non-root user
+- production uvicorn command
+- environment-based config
+
+## Day 28: Terraform Foundation
+
+Create:
+
+```text
+infra/main.tf
+infra/variables.tf
+infra/outputs.tf
+```
+
+Add:
 
 - AWS provider
-- variables
-- outputs
 - ECR repository
-- S3 bucket for raw events
-- S3 bucket name output for application config
-- IAM basics
-- VPC setup, or default VPC if you want to keep the scope smaller
+- S3 evidence bucket
+- CloudWatch log group
+- basic IAM roles
 
-Keep Terraform flat at first with `main.tf`, `variables.tf`, and `outputs.tf`. Add modules only if the infrastructure becomes hard to maintain.
+Keep Terraform flat.
 
-At this point, replace the local-only archive implementation with the real S3 storage implementation for production config.
+## Day 29: RDS PostgreSQL
 
-### Day 19: RDS and Secrets
-
-Add:
+Add Terraform for:
 
 - RDS PostgreSQL
+- database subnet group if needed
 - database security group
-- app security group
-- Secrets Manager or SSM parameters
-- database credentials
-- application environment variables
+- generated or provided DB password
+- Secrets Manager or SSM parameter storage
 
-Deliverables:
+Document required variables.
 
-- Terraform can provision database resources
-- secrets are not committed to git
-- documentation explains required variables
+## Day 30: ECS Fargate And ALB
 
-### Day 20: ECS Fargate and ALB
-
-Add:
+Add Terraform for:
 
 - ECS cluster
-- task definition
+- ECS task definition
 - ECS service
 - Application Load Balancer
 - target group
-- CloudWatch log group
+- app security group
+- task execution role
 
-Container environment should include:
+Container config should include:
 
 ```text
 DATABASE_URL
@@ -634,11 +747,7 @@ S3_BUCKET_NAME
 ENVIRONMENT=production
 ```
 
-Deliverable:
-
-- Terraform can create the deployable runtime environment
-
-### Day 21: Deploy Workflow
+## Day 31: Deployment Workflow
 
 Create:
 
@@ -649,238 +758,372 @@ Create:
 On merge to `main`:
 
 1. Build Docker image.
-2. Tag it with the commit SHA.
-3. Push it to ECR.
-4. Update the ECS task definition.
-5. Deploy the ECS service.
+2. Tag with commit SHA.
+3. Push to ECR.
+4. Update ECS task definition.
+5. Deploy ECS service.
 6. Verify `/health`.
 7. Verify `/ready`.
 
-By the end of Week 3, the project should be deployable.
+## Day 32: CloudWatch Logs
 
-## Week 4: Production Polish and Resume Readiness
+Verify logs appear in CloudWatch.
 
-### Day 22: EventBridge Scheduled Job
+Log fields:
 
-Add scheduled aggregation.
-
-Recommended approach:
-
-- use the same Docker image
-- run a different command for the aggregation job
-- trigger it with EventBridge Scheduler
-
-Command:
-
-```bash
-python -m app.jobs.aggregate_daily_metrics --date yesterday
+```text
+request_id
+route
+method
+status_code
+duration_ms
+user_id where safe
+project_id where safe
 ```
 
-Terraform should define:
+## Day 33: CloudWatch Alarms
 
-- scheduler
-- IAM role
-- ECS task invocation permissions
-
-### Day 23: CloudWatch Logs and Alarms
-
-Add basic observability.
-
-Implement:
-
-- structured JSON logs
-- request id or correlation id
-- useful ingestion logs
-- aggregation job logs
-- clear error logs without secrets
-
-Terraform alarms:
+Add basic alarms:
 
 - unhealthy ECS tasks
 - high ALB 5xx responses
-- optional high target response time
+- high target response time
 
-### Day 24: Documentation Pass 1
+Keep alarms simple.
 
-Write project documentation.
+## Day 34: Security Pass
 
-Files:
+Add or verify:
+
+- no secrets committed
+- `.env.example` is safe
+- Trivy scan works
+- auth errors do not leak information
+- project-scoped resources return `404` for outsiders
+- CORS config is environment-based
+
+## Day 35: Production Documentation
+
+Write:
 
 ```text
 docs/architecture.md
-docs/data-pipeline.md
 docs/deployment.md
 docs/security.md
 docs/runbook.md
+docs/scoring.md
 ```
 
 Cover:
 
-- system architecture
-- request flow
-- event ingestion pipeline
-- S3 archive layout
-- metric aggregation
-- deployment process
-- secrets handling
+- architecture
+- local setup
+- AWS deployment
+- secrets
+- migrations
+- report scoring
 - operational runbook
 
-### Day 25: Demo Data and API Examples
+## Day 36: End-To-End Local Validation
 
-Create:
+From a clean setup:
 
-```text
-scripts/demo_seed_events.py
-```
+1. Start Docker Compose.
+2. Run `dbmate up`.
+3. Run tests.
+4. Run seed script.
+5. Generate report.
+6. Upload or mock evidence file.
+7. Confirm report includes evidence.
 
-It should:
+Fix friction immediately.
 
-- create demo services
-- submit deployment events
-- submit incident events
-- submit health check events
-- generate enough data for analytics
+## Day 37: End-To-End AWS Validation
 
-Add README examples using `curl`.
-
-Demo flow:
-
-```text
-register user
-login
-create service
-submit events
-run aggregation
-query analytics
-```
-
-### Day 26: End-to-End Local Validation
-
-Run the full system locally from scratch.
-
-Checklist:
-
-- clone fresh or clean local setup
-- copy `.env.example`
-- start Docker Compose
-- run migrations
-- run tests
-- seed demo data
-- run aggregation
-- query analytics
-
-Fix any setup friction immediately. A resume project is much stronger when someone else can run it without guessing.
-
-### Day 27: Cloud Deployment Validation
-
-Deploy to AWS and verify.
-
-Checklist:
+Verify:
 
 - Terraform apply succeeds
-- GitHub Actions deploy succeeds
-- ECS task becomes healthy
-- ALB responds
+- ECS service starts
+- RDS connection works
+- S3 presigned upload flow works
 - `/health` works
 - `/ready` works
-- events can be ingested
-- raw event appears in S3
-- metrics job runs
-- analytics endpoint returns data
 - logs appear in CloudWatch
-- alarms exist
+- deployment workflow works
 
-Save useful screenshots or command outputs for portfolio notes.
+## Day 38: README And Portfolio Polish
 
-### Day 28: Resume and Portfolio Polish
+Update README with:
 
-Make the project presentable.
+- project overview
+- architecture diagram
+- endpoint examples
+- local setup
+- Docker setup
+- testing
+- AWS deployment
+- demo user journey
+- sample report JSON
+- known tradeoffs
+
+## Day 39: Production Bug Fix Day
+
+Fix:
+
+- failing tests
+- flaky CI
+- unclear docs
+- rough error responses
+- deployment gaps
+
+No new features.
+
+## Day 40: Resume-Worthy Freeze
+
+Final checks:
+
+- app works locally
+- tests pass
+- CI passes
+- Docker works
+- AWS deploy works
+- S3 file flow works
+- reports are useful
+- docs explain the project clearly
+
+This is the resume-ready version.
+
+## Stage 3: Very Impressive Version
+
+**Goal:** add standout features after the production version is stable.
+
+## Day 41: Invitation Tokens
+
+Add:
+
+```text
+POST /projects/{project_id}/invitations
+POST /invitations/{token}/accept
+POST /invitations/{token}/decline
+```
+
+Rules:
+
+- tokens expire
+- owners create invites
+- accepted invites create membership
+
+## Day 42: Email Invitations
+
+Add email sending for invitations.
+
+Local behavior:
+
+- log email contents
+- do not require real provider
+
+Production later:
+
+- AWS SES or another provider
+
+## Day 43: In-App Notifications
+
+Create `notifications` table.
+
+Routes:
+
+```text
+GET   /notifications
+PATCH /notifications/{notification_id}/read
+```
+
+Generate notifications for:
+
+- added to project
+- task assigned
+- task commented
+- task approved
+- report generated
+
+## Day 44: Reminder Jobs
+
+Add scheduled reminders for:
+
+- overdue tasks
+- tasks due soon
+- project due soon
+
+Use a simple scheduled command first. Deploy as ECS scheduled task with EventBridge later.
+
+## Day 45: CSV Report Export
+
+Add:
+
+```text
+GET /projects/{project_id}/reports/{report_id}/export.csv
+```
+
+CSV is practical and easier than PDF.
+
+## Day 46: PDF Report Export
+
+Add PDF export only after CSV works.
+
+Keep formatting simple:
+
+- project summary
+- member score table
+- evidence details
+- generated timestamp
+
+## Day 47: External Evidence Links
+
+Add generic evidence links:
+
+```text
+GitHub PR
+Google Doc
+Figma
+Moodle submission
+meeting notes
+```
+
+Generic links are more useful than GitHub-only support.
+
+## Day 48: GitHub Evidence Integration
+
+Optional integration:
+
+- link commit or PR to a task
+- store metadata
+- count linked PRs as evidence
+
+Do this only after generic evidence links work.
+
+## Day 49: Peer Review
+
+Add private peer ratings.
+
+Rating categories:
+
+- reliability
+- communication
+- quality of work
+
+Keep peer review weight low because it can be biased.
+
+## Day 50: Anti-Gaming Rules
+
+Add safeguards:
+
+- comment score cap
+- evidence score cap
+- large task requires evidence
+- late activity warning
+- disputed work excluded
+- self-approval blocked
+
+## Day 51: Report Locking
+
+Add:
+
+```text
+POST /projects/{project_id}/reports/{report_id}/lock
+```
+
+Rules:
+
+- only owner can lock
+- locked report cannot be regenerated in place
+- new report version can be created if needed
+
+## Day 52: Audit Logs
+
+Create `audit_logs` table for security-sensitive actions:
+
+- login failed
+- member removed
+- role changed
+- project archived
+- report locked
+- invite accepted
+
+Keep contribution events for product activity. Use audit logs for security and administration.
+
+## Day 53: Admin Observability API
+
+Add admin-only endpoints:
+
+```text
+GET /admin/stats
+GET /admin/recent-audit-logs
+GET /admin/recent-errors
+```
+
+Do not build a full admin dashboard unless you also build a frontend.
+
+## Day 54: Load Testing
+
+Add a small load test script for:
+
+- login
+- list projects
+- list tasks
+- generate report
+
+Document rough results and bottlenecks.
+
+## Day 55: Performance Pass
+
+Review:
+
+- indexes
+- slow report queries
+- N+1 query patterns
+- pagination
+- event timeline queries
+
+Add indexes where needed.
+
+## Day 56: Final Portfolio Polish
 
 Finalize:
 
 - README
 - architecture diagram
-- endpoint list
-- local setup instructions
-- deployment setup instructions
-- CI/CD explanation
-- security notes
+- API examples
+- demo script
+- sample report
+- deployment guide
 - runbook
-- known tradeoffs
+- resume bullets
 
-Resume bullet examples:
+## Final Recommended Scope
 
-```text
-Built a production-style FastAPI event platform for ingesting, archiving, and analysing operational service events using PostgreSQL, S3, ECS Fargate, Terraform, and GitHub Actions.
-```
+If time is limited, stop at Stage 2. That is already a strong resume project.
 
-```text
-Implemented JWT authentication, idempotent event ingestion, dead-letter handling, scheduled metric aggregation, analytics endpoints, Dockerized local development, CI checks, ECR/ECS deployment automation, and CloudWatch monitoring.
-```
+Do not start Stage 3 until:
 
-## Must-Have Scope If You Fall Behind
+- MVP is complete
+- tests are passing
+- Docker works
+- CI works
+- AWS deployment works
+- reports are actually useful
 
-Prioritize these features:
+The project is impressive because it combines:
 
-```text
-FastAPI backend
-JWT auth
-service CRUD
-event ingestion
-idempotency
-dead-letter table
-PostgreSQL
-daily metrics aggregation
-analytics endpoints
-Docker Compose
-tests
-README
-```
+- real user pain
+- multi-user permissions
+- backend-heavy product logic
+- contribution scoring
+- evidence tracking
+- PostgreSQL
+- raw SQL migrations
+- tests
+- Docker
+- AWS deployment
+- Terraform
+- CI/CD
+- observability
 
-These features make the project resume-ready even before AWS deployment is perfect.
-
-## Strong Resume Additions
-
-Add these after the must-have scope is stable:
-
-```text
-S3 archival
-Terraform
-ECS Fargate
-GitHub Actions deploy
-CloudWatch logs and alarms
-EventBridge scheduled aggregation
-Trivy security scanning
-```
-
-## Features You Can Simplify
-
-If time gets tight, simplify:
-
-```text
-advanced Terraform modules
-multiple AWS environments
-complex IAM boundaries
-full alerting suite
-very high test coverage everywhere
-advanced analytics beyond daily metrics
-```
-
-## Final Success Criteria
-
-By the end, the project should demonstrate this complete flow:
-
-1. A user registers and logs in.
-2. The user creates a service.
-3. The user submits operational events.
-4. Valid events are stored in PostgreSQL.
-5. Raw payloads are archived to S3 or local storage in development.
-6. Invalid events are saved to the dead-letter table.
-7. Duplicate submissions are prevented with idempotency keys.
-8. A daily aggregation job calculates reliability metrics.
-9. Analytics endpoints expose deployment, incident, and health metrics.
-10. The app runs locally with Docker Compose.
-11. Tests and scans run in GitHub Actions.
-12. Terraform provisions the AWS infrastructure.
-13. The app deploys to ECS Fargate.
-14. Logs and basic alarms are visible in CloudWatch.

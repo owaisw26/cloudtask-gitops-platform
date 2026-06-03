@@ -1,10 +1,7 @@
 from fastapi import FastAPI
+from app.api.routes import health
 
-app = FastAPI(title="Cloudops Event Platform")
+app = FastAPI(title="GroupMark API")
 
-@app.get("/health")
-def getHealth():
-    return {
-        "status": "ok"
-    }
+app.include_router(health.router)
 
