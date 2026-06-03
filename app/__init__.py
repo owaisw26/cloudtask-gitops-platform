@@ -1,0 +1,1 @@
+"""GroupMark application package."""
